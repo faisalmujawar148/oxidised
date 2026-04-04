@@ -1,3 +1,8 @@
+use rand::Rng;
+
+
+// This is a binary create because we have a main fn here.
+// If we didn't have a main(), this would be a library crate!
 fn main() {
     println!("Hello, world!");
     let mut x: i32 = 5;
@@ -19,7 +24,12 @@ fn main() {
     statements();
     ownership();
     borrowing();
-    compound_types();
+    compound_types_strings(); // focusing on Strings and &str, arrays, slices, tuples, structs, enums
+    compound_types_arrays();
+    compound_types_slices();
+    compound_types_tuples();
+    compound_types_structs();
+    compound_types_enums();
     assert_eq!(x,5); //macro -> !
     println!("success");
 }
@@ -256,7 +266,9 @@ fn type_of<T> (_: &T) -> String {
 }
 
 
-
+fn size_of<T> (_: &T) -> usize {
+    std::mem::size_of::<T>()
+}
 
 
 
@@ -825,7 +837,7 @@ fn borrowing() {
 }
 
 
-fn compound_types() {
+fn compound_types_strings() {
     // String vs &str
     // String is heap allocated, and owns its' contents, i.e
     // the mem addr + capacity is under it's ownership, and is mutable
@@ -1006,9 +1018,1053 @@ fn compound_types() {
         println!("{}",s1);
         println!("{}",s);
     }
+
+    {
+        let s1: String = String::from("hello");
+        let s2: String = String::from("world!");
+        let s3 = s1.clone() + s2.as_str();// concatenation: String + &str, 
+                                          // can't do String + String. The first arg
+                                          // has to be a String, and the other following
+                                          // args have to be string slices
+        let s4 = s1 + &s2; // another way of using a String as str, is it make it a
+                           // reference. then it'll be treated as a string slice &str
+                           // however there is some magic involved here, because it 
+                           // shouldn't be &str it should be &String, right?
+                           // the compiler however has a deref (TBD) method that 
+                           // basically converts &String -> &str
+                           // &String -> String -> str -> &str
+        assert_eq!(s3, "helloworld!");
+        // println!("{}",s1); we can no longer use this as it's was taken
+        println!("{}", s3);
+    }
+    
+
+    // Converting &str to String
+    {
+        let s: &str = "hello world";
+        greets(s.to_string());
+
+        fn greets(s: String) {
+            println!("{}",s)
+        }
+    }
+    
+    {
+        let s: &str = "hello world";
+        greets(String::from(s));
+
+        fn greets(s: String) {
+            println!("{}",s)
+        }
+    }
+
+    // Hexadecimal values / Unicode code points
+
+    {
+        let byte_esp = "I'm writing Ru\x73\x74!";
+        let uni_code = "\u{211D}";
+
+        println!("{}", byte_esp);
+        println!("{}", uni_code);
+    }
+
+    // Raw String -> string without escape sequences
+    {
+        let raw_str = r"Escapes don't work here: \x73 \u{211D}";
+
+        // but if you need quotes
+
+        let quote = r#"And then "rats"!"#;
+
+        println!("{}{}", raw_str, quote);
+    }
+
+    // String indexing
+    {
+        let s1: String = String::from("hello world");
+        // Method 1: iterate over chars safetly using .nth() <- iterator
+        // .chars() converts the string into a list/iterator of chars,
+        // and then we use .nth which will just walk over the iterator and return
+        // whichever index we are looking for, it returns it as Option<char>,
+        // so we have to unwrap it if we want to use the val.
+  
+        let s0 = s1.chars().nth(0);
+        println!("{:?}",s0);
+        println!("{:?}", type_of(&s0));
+        println!("{}", s1); // Since String is heap alloc. we don't move it, we borrow
+                            // and then copy the values, etc. etc. so we can still use
+                            // it
+
+        let proper_s0 = &s0.unwrap();
+
+        println!("{}", proper_s0);
+
+        // Method2: Convert to byte_stream? and then directly index over that
+        // .as_bytes(), and then index it.
+
+        let s2 = s1.as_bytes()[0];
+        println!("{}",s2 as char); // on it's own it will return the byte val of it, so have to
+                                   // tell our print macro to convert it to a char
+        // Method 3: convert to &str slice, because String implements Index<Range<usize>>,
+        // not Index<usize> directly, so even though [0..1] will only return 0,
+        // the params requires a range to be provided
+        let h = &s1[0..1];
+
+
+        println!("{:?}",h);
+        // Note: Unicode chars can take 3/4 bytes, eg:'‿' is 3 bytes, so the range we have to iterate
+        // is actually like
+
+        let note: String = String::from("hello,‿,rats");
+
+        let h1 = &note[6..9];
+
+        println!("{}",h1);
+        
+        // Which is why using the iterator method is safer, and is the preferred way
+    }
+
+    {
+        for c in "起初我們並不熟悉，漸漸地就熟悉起來了。".chars() {
+            println!("{}", c);
+        };
+    };
+
+}
+
+// Arrays:
+// Fixed size collection of the same data type, stored as contiguous block in stack mem.
+// syntax: [T; Length] -> indicating that length is fixed at compile time.
+// Arrays neither shrink nor grow, they retain their size.
+fn compound_types_arrays() {
+    {
+        let arr_rats:[i32; 5] = [1, 2, 3, 4, 5];
+        assert!(arr_rats.len() == 5);
+    
+        println!("5 rats!!");
+    }
+
+    {
+        // We also let the compiler infer the type for us
+
+        let test_arr:[_; 2] = [1, 2];
+        let test_arr:[i32; _] = [1, 2];
+        let test_arr2 = ['r', 'a', 't'];
+        println!("{:?}", size_of(&test_arr));
+        assert!(size_of(&test_arr) == 8); // because each i32, is 4 bytes, and 2 of them = 8
+        println!("{:?}", size_of(&test_arr2)); // each char is 4 bytes, and 3 of them = 12
+    }
+
+    {
+        let list: [i32; 100] = [1; 100]; // [1,1,...,1]
+        let mut string: String = String::from(""); 
+        for x in list {
+            string += &x.to_string();
+        }
+        println!("{}",string);
+    }
+
+
+    {
+        let names: [String; 2] = [String::from("Rat"), String::from("Mousey")];
+
+        let name0 = names.get(0).unwrap(); // safer than direct indexing as it gets returned
+                                           // as an Option<String>, which will return None if
+                                           // it can't find the value at the index mentioned
+                                           // super useful when doing this at runtime
+
+        let ref name1 = names[1]; // doesn't have safety built in, if the value isn't found
+                              // runtime panic. [index out of bounds]
+                              // Also, you can't directly use it, as the array contains type String
+                              // which doesn't implement the 'copy' trait, i.e can only 'move'
+                              // and if we do that we break the array. i.e we have to ref names
+        let name2 = &names[1];
+        println!("{}{}{}",name0,name1,name2);
+    }
+    
+}
+// Slices:
+// Reference to a contiguous sequence of elements in a collection
+// provide a way to borrow part of the collection without taking full ownership
+// can be created from arrays, vectors, Strings, and other collections implementing the 
+// Deref trait (TBD)
+// we already saw string slice &str[1..3]
+// it's the same data struct as a &str slice, i.e 
+// String Slice (&str): 
+//          STACK                          HEAP  
+//                                   index   |   value
+//                                     0     |   h
+//                                     1     |   e
+//      name    |   value             ...    |  ...
+//   ptr(usize) |   ----------------> 10     |   w
+//   len(usize) |   5                 11     |   o
+//                                    12     |   r
+//                                    13     |   l
+//                                    14     |   d
+// Slices is a just a reference to ANY contiguous sequence of elem.s in a collection
+// i.e the data could be in heap, binary, stack, etc. it doesn't matter
+// eg:
+// String Literal Slice (&str)
+//          STACK                          BINARY
+//                                   index   |   value
+//                                     0     |   h
+//                                     1     |   e
+//      name    |   value             ...    |  ...
+//   ptr(usize) |   ----------------> 10     |   w
+//   len(usize) |   5                 11     |   o
+//                                    12     |   r
+//                                    13     |   l
+//                                    14     |   d
+// Here is the slice is of a string that's stored in the binary
+// Fixed size Array Slice (&arr[10..15])
+//          STACK                          STACK
+//                                   index   |   value
+//                                     0     |   h
+//                                     1     |   e
+//      name    |   value             ...    |  ...
+//   ptr(usize) |   ----------------> 10     |   w
+//   len(usize) |   5                 11     |   o
+//                                    12     |   r
+//                                    13     |   l
+//                                    14     |   d
+// if it was a Dynamic size Array i.e Vec, it would be allocated on the HEAP
+// instead
+fn compound_types_slices() {
+    {
+        let arr = [1,2,3];
+        let s1: &[i32] = &arr[0..2];
+    };
+    // [i32] and str are slice types, but we can't directly use them as the are DST,
+    // and the compiler will complain if they size isn't known i.e we have to use a 
+    // ref to it
+
+    {
+        let s2: &str = "hello, world" as &str; // We can't directly use str, (mentioned ^)
+        println!("{}",s2);
+    };
+
+    {
+
+        let arr: [char; 3] = ['r','a','t'];
+        let slice: &[char] = &arr[..3]; 
+        // 0..2 (with 2 not being included)
+        // slice & arr
+        // remember &[char] is the ptr (usize) + len (usize) 
+        println!("{:?}", std::mem::size_of_val(&arr)); // because 3 * char
+        println!("{:?}", std::mem::size_of_val(&slice)); // because ptr(usize) + len(usize)
+        println!("hello world");
+    }
+
+    {
+        let arr: [i32; 5] = [1, 2, 3, 4, 5];
+        let sice: &[i32] = &arr[1..4];
+        println!("{:?}",sice);
+    }
+
+    {
+        let s = "你好，世界";
+        let slice = &s[0..3]; //unicode characters take 3 bytes
+        assert!(slice == "你");
+        let slice = &s[0..6]; //unicode characters take 3 bytes, so 2 of them will be 6
+        println!("{}", slice);
+    }
+
+    {
+        let mut s = String::from("hello world");
+        
+        // Here, &s is `&String` type, but `first_letter` needs a `&str` type.
+        // It works because `&String` implicitly converted to &str.
+        // This is called Deref coercion TBD
+
+        let letter = first_letter(&s);
+
+        println!("the first letter is: {}", letter);
+        
+        s.clear();
+
+        fn first_letter(s: &str) -> &str {
+            &s[..1]
+        }
+    }
 }
 
 
+fn compound_types_tuples() {
+    {
+        let t: (u8, i16) = (0, -1); // tuples can have different types, unlike arrays
+        // indexing is done like this
+        assert_eq!(t.1, -1);
+
+        // we can have tuples in tuples
+        let t1: (u8, (u8,i16)) = (2, (1, 30));
+        // here you can clearly see that String doesn't have to be called &String, because
+        // 1 of it's type, but secondly the type itself is already a ptr to heap mem.
+        let t: (u8, u16, i64, &str, String) = (1u8, 2u16, 3i64, "hello", String::from(", world"));
+        // indexing the inner tuple
+        println!("{:?}", (t1.1).0); // we need the '()' so that the compiler knows not float
+        // we can also do it by destructuring the tuple 
+        let (_, (_, inner)) = t1;
+        println!("{:?}", inner);
+        // most small tupes can be printed out, but long tuples can't (over 12 elements)
+        let long_tuple = (1,2,3,4,5,6,7,8,9,10,11,12); //this is the limit
+        println!("{:?}",long_tuple);
+        println!("Success!");
+    }
+
+    {
+        // More destructuring stuff
+        let tup = (1, 6.4, "hello");
+
+        let (x, z, y) = tup;
+
+        println!("{} {} {}", x, y, z);
+
+        // tuples can be used as function args and return vals
+        let (x,y) = sum_multiply((2,5));
+
+        fn sum_multiply(nums: (i32, i32)) -> (i32, i32) {
+            ((nums.0 + nums.1),(nums.0 * nums.1))
+            // nums.0 + nums.1, nums.0 * nums.1 is also valid
+        }
+        println!("{:?}", (x,y)); 
+    }
+}
+
+// like classes in java/oop
+// With normal Structs like User { active: true, username: String::from("blah");, etc.}, 
+// we have to use key-value initialisation, but with Tuple Structs we can also just do positional
+// initialisation, i.e User(True, String::from("blah"), ...), however the trade-off is that the 
+// fields will not have any names, only indexes, i.e with normal structs you can do:
+// User.active to access the field, but in tupe structs, you will have to do User.0
+// which increases the need for documentation, and overall more confusing
+fn compound_types_structs() {
+    struct User {
+            active: bool,
+            username: String,
+            email: String,
+            sign_in_count: u64,
+    }
+    
+    fn build_user(email: String, username: String) -> User {
+        User {
+            active: true,
+            // Field init Shorthand, because the params and struct field names
+            // are exactly the same, we can use the field init shorthand to change
+            // username: username, to
+            username,
+            // And
+            // email: email, to
+            email,
+            sign_in_count: 1,
+        }
+    }
+    
+    {
+        let user: User = User {
+            active: true,
+            username: String::from("pacs"),
+            email: String::from("pacs@yahoo.com"),
+            sign_in_count: 999,
+        };
+
+        println!("{}", user.email);
+    }
+
+    { 
+        let mut user1: User = User {
+            active: true,
+            username: String::from("abc"),
+            email: String::from("abc@gmail.com"),
+            sign_in_count: 3,
+        };
+        
+        // updating field values
+        user1.email = String::from("anotheremail@email.com");
+
+        println!("{}", user1.email);
+
+        // Create instances with struct update syntax
+        // Naive method
+        let user2 = User {
+            active: user1.active,
+            username: user1.username.clone(), //because we don't want to break user1 (yet)
+            email: String::from("rat@gmail.com"),
+            sign_in_count: user1.sign_in_count,
+        };
+
+        // Using struct update syntax
+        let user2 = User {
+            email: String::from("bigrat@gmail.com"),
+            ..user1
+        };
+        
+        // the .. syntax specifies the remaining fields not explicitly set should
+        // have the same values as the fields in the given instance (user1)
+        // the ..<instance> has to come last, but the order of the fields being
+        // explicitly mentioned doesn't matter, as they are just key-value pairs
+        // and whatever fields are missing will be filled out
+        
+        // There is a lot of magic behind the ..<instance> syntax, but it uses '='
+        // like an assignment; this is because it moves the data, i.e we can no longer
+        // use user1, because it is a partial move, i.e the email field of user1
+        // is still available to be called, obviously all the stack alloc. values like
+        // active, sign_in_count are still available, as they are just copied
+        // but the String type (because they are mem ptrs, and there can only be 1 ptr
+        // to the same mem addr.), so we can't call user1.username as that field's ownership
+        // is now transferred to user2 
+        println!("{}", user2.email);
+    }
+
+    {
+        // tuple structs
+        struct Colour(i32, i32, i32);
+        struct Point(i32, i32, i32);
+
+        let origin = Point(0, 0, 0);
+        let p1 = Point(0, 100, 0);
+        let p2 = Point(100, 0, 0);
+        let p3 = Point(0, 100, 0);
+        let p3 = Point(0, 0, 100);
+        let p4 = Point(100, 100, 100);
+        let black = Colour(0, 0, 0);
+        let red = Colour(255, 0, 0);
+        let white = Colour(255, 255, 255);
+        let blue = Colour(0, 0, 255);
+        let green = Colour(0, 255, 0);
+        paint(black, "HELLO!!");
+        paint(red, "HELLO!!");
+        paint(white, "HELLO!!");
+        paint(blue, "HELLO!!");
+        paint(green, "HELLO!!");
+
+        draw(origin);
+        draw(p1);
+        draw(p2);
+        draw(p3);
+        draw(p4);
+        // now even though Colour and Point both have the same params,
+        // you cannot pass them to a fn requiring another
+        fn draw(point: Point){
+            let x: i32 = point.0 / 50;
+            let y: i32 = point.1 / 50;
+            let z: i32 = point.2 / 50;
+            let painted_x = paint(Colour(0,255,0), "X"); 
+            let painted_y = paint(Colour(255,0,0), "Y"); 
+            let painted_z = paint(Colour(0,0,255), "Z"); 
+            let idx = x as usize;
+            let idy = y as usize;
+            let idz = z as usize;
+            
+            let max_steps: usize = 5;
+
+            let origin_col: usize = (max_steps + 1) * 2; // *2 for size for z axis
+            let origin_row: usize = (max_steps + 1);
+
+            let total_rows = (origin_row * 2);
+            let total_cols = (origin_col * 2); // making extra sure we have space for z
+            
+            // 2D grid 
+            let mut grid: Vec<Vec<String>> = vec![vec![" ".to_string(); total_cols]; total_rows];
+
+            // Y axis
+            grid[0][origin_col] = paint(Colour(255,0,0), "y");
+            for i in 1..=max_steps {
+                let row = origin_row-i;
+                grid[row][origin_col] = if i == idy {
+                                            painted_y.clone()
+                                        } else {
+                                            "*".to_string()
+                                        };
+            }
+            // X axis
+            grid[origin_row][total_cols - 1] = paint(Colour(0,255,0), "x");
+            for i in 1..=max_steps {
+                let col = origin_col + i*2;
+                grid[origin_row][col] = if i == idx {
+                                            painted_x.clone()
+                                        } else {
+                                            "*".to_string()
+                                        };
+            }
+            // Z Axis
+            grid [total_rows - 1][0+max_steps+1] = paint(Colour(0, 0, 255), "z");
+            for i in 1..=max_steps {
+                let row = origin_row + i;
+                let col = origin_col - i;
+                grid[row][col] = if i == idz {
+                                            painted_z.clone()
+                                        } else {
+                                            "*".to_string()
+                                        };
+            }
+            
+            // origin
+            grid[origin_row][origin_col] = "o".to_string();
+
+            for row in &grid {
+                println!("{}", row.join("").trim_end());
+            }
+        }
+        fn paint(colour: Colour, message: &str) -> String {
+                format!("\x1b[38;2;{};{};{}m{}\x1b[0m", colour.0, colour.1,colour.2,message)
+        }
+
+        // I got distracted, but the point of this was that you cannot pass Colour to draw()
+        // despite them having the same fields types, and same no. of fields
+    }
+
+    {
+        // Unit-like Structs, useful when you want to implement a trait
+        // on some type but you don't have any data that you want to store in the
+        // type itself. traits TBD
+        struct AlwaysEqual;
+
+        let subject = AlwaysEqual;
+
+        println!("{}",type_of(&subject));
+    }
+
+    // Why didn't we use &str instead of String in the structs?
+    // the main reason why we didn't do that is because we haven't done
+    // lifetime yet (TBD)
+    // i.e the compiler will complain if we pass a &str without a lifetime
+    // specifier, eg:
+    // struct Staff {
+    //      active:bool,
+    //      name:&str,
+    //      email:&str,
+    //      salary:i32,
+    //  }
+    //  let staff1: Staff = Staff {
+    //      active: true,
+    //      name: "someone",
+    //      email: "iusedtoknow@gmail.com",
+    //      salary: 99999,
+    //  };
+    //  if we ran this, the compiler will complain the name and email fields
+    //  are missing lifetime specifiers, TBD
+
+    
+    // We can use structs to improve readability by a lot
+    {
+        #[derive(Debug)]
+        struct Rectangle {
+            length: i32,
+            height: i32,
+        }
+        let shape: Rectangle = Rectangle{
+            length: dbg!(15),
+            height: 25,
+        };
+        fn size(rectangle: &Rectangle) -> i32 {
+            rectangle.length * rectangle.height
+        }
+
+        println!("area of rectangle: {}", size(&shape));
+        dbg!(&shape);
+    }
+
+    // Another implementation
+    {
+        struct Rectangle(i32, i32);
+        fn area(shape: Rectangle) -> i32 {
+            shape.0 * shape.1
+        }
+        fn area2(shape: (i32,i32)) -> i32 {
+            shape.0 * shape.1
+        }
+        let shape1: Rectangle = Rectangle(100, 200);
+        let shape2: (i32, i32) = (100, 200);
+        println!("area:{}",area(shape1));
+        println!("area:{}",area2(shape2));
+    }
+    
+    // Methods, similar to fn but defined within the context of struct/enu/traitobj
+    // TBD, the first param is always self, which represents the instance of the struct
+    // the method if being called on.
+    {
+        #[derive(Debug)]
+        struct Rectangle {
+            length: i32,
+            height: i32,
+        }
+
+        impl Rectangle {
+            // &self is short for self: &Self
+            // here we use &self, because we are immutably borrowing it
+            // but if we wanted to mutably borrow it, we'd use just '&mut self'
+            // it's rare for that just takes ownership by just using 'self'
+            // it's usually used when the method transforms self into something else
+            // and you want to prevent the caller from using the original instance after
+            // the transformation. ** <- for example if we had a pokemon
+            // and it had an evolve method, that take itself and change it to another
+            // pokemon, we'd probably just use 'self'
+            fn area(&self) -> i32 {
+                self.length * self.height
+            }
+            // Like java, we can also create getters and setters and then make the fields
+            // private. Right now, shape.length will return the same thing as
+            // shape.getLength(), but again, once we make the fields private,
+            // we can create proper getters and setters
+            fn getLength(&self) -> i32 {
+                self.length
+            }
+            // C/C++ . and -> operators, '.' is for when you're calling a method
+            // directly on the object, -> is when you're calling a method through
+            // a pointer on the object.
+            // Rust doesn't have a ->, instead rust has a feature called
+            // automatic referencing and dereferencing
+            // eg: 
+            // object.something() <-> &object.something() <-> &mut object.something()
+            // it matches the signature of the method, this makes borrowing implicit
+            // for method receivers!!
+            fn can_hold(&self, rectangle2: &Rectangle) -> bool {
+                self.length > rectangle2.length && self.height > rectangle2.height
+            }
+
+            fn setLength(&mut self, length: i32) {
+                self.length = length
+            }
+
+            // Associated Functions
+            // All functions defined within an impl block are called associated fncs
+            // because they are associated with the type named after the impl
+
+            fn square(size: i32) -> Self {
+                Self {
+                    length: size,
+                    height: size,
+                }
+            }
+
+            // the way we called square is like: Rectange::square,
+            // just like String::from !!, because it's the same type, it's
+            // an associated function/method that doesn't take &self
+            // and these types are often used as constructors
+            // which will return a new instance of the struct
+            // the '::' are used by both associated functions and 
+            // namespaces created by modules
+        }
+
+        // Each struct is allowed to have multiple impl blocks,
+        // here we fit every method we wanted in 1, but we could have split them
+        // into multiple. In fact there's a case in which multiple impl blocks
+        // are useful (TBD) when we discuss generic types and traits!
+
+        let shape: Rectangle = Rectangle{
+            length: 15,
+            height: 25,
+        };
+        
+        let mut shape2: Rectangle = Rectangle{
+            length: 50,
+            height: 26,
+        };
+        
+        let shape3: Rectangle = Rectangle::square(30);
+
+        println!("{:?}", shape3.getLength());
+
+        println!("area of rectangle: {}", shape.area());
+        println!("shape 1 can fit shape 2: {}", shape.can_hold(&shape2));
+        println!("shape 2 can fit shape 1: {}", shape2.can_hold(&shape));
+
+        shape2.setLength(100);
+        println!("{:?}", shape2.getLength());
+    }
+
+
+}
+
+fn compound_types_enums() {
+    // Structs let you combine multiple different fields, enums gives you a way of 
+    // saying those fields can only have values from a set of values
+    // and you can only have one of these values for a var, i.e
+    // if you had:
+    // enum Light {
+    //      Red,
+    //      Green,
+    //      Yellow,
+    //  }
+    //  .
+    //  You can't make 1 variable both Light::Red and Light::Yellow (unless write some code for that)
+    //  Also, yes, that's how you access the values within the enum, again use the the double :
+    {
+        enum IpAddrKind {
+            V4(u8, u8, u8, u8),
+            V6(String),
+        } // we could've also implemented a struct IpAddr, with the enum IpAddrKind,
+          // however representing the same concept just using enum is more concise
+          // in fact, the std lib does it like this for ipaddr, and instead the fields
+          // inside are the ones that are actually structs!!
+        fn route(ip_kind: IpAddrKind) {}
+        let four = IpAddrKind::V4(1,1,1,1);
+        let six = IpAddrKind::V6(String::from("::1"));
+
+    }
+
+    { // how it's implemented in the std lib net for ipaddr
+        struct Ipv4Addr {
+            // --snip--
+        }
+        
+        struct Ipv6Addr {
+            // --snip--
+        }
+        
+        enum IpAddr {
+            V4(Ipv4Addr),
+            V6(Ipv6Addr),
+        }
+    }
+
+    // You can also make enums of enums
+    // In fact Option<T> is literally an enum like this:
+    // enum Option<T> {
+    //      Some(T),
+    //      None,
+    //  }
+    //  Option basically means either it'll have this value or None
+    //  And Some is just 1 of the states, it's a value, not type
+    //  This exists to deal with null values/references!!
+    {
+        #[derive(Debug)]
+        enum Type {
+            Fire,
+            Water,
+            Air,
+            Earth,
+        }
+        // you can have multiple different fields for each as well!
+        // You don't necessarily have to have the same type in each
+        #[derive(Debug)]
+        enum Move {
+            Punch(Option<Type>),
+            Kick(Option<Type>),
+            Absorb(Option<Type>),
+            Run,
+            Talk(String),
+        } 
+
+        // it's better in cases to use an enum instead of different structs
+        // because each has it's own type, we couldn't as easily
+        // define a function to take any of these kinds of Moves
+        // as could with the Move enum. which just a single type
+        // Another similarity b/w enums and structs is that you can 
+        // also define methods using impl!!
+        
+        impl Move {
+            fn call(&self) {
+                dbg!(&self);
+            }
+        }
+
+        let m: Move = Move::Punch(Some(Type::Fire));
+        m.call();
+
+        let some_num = Some(5); // it can infer it's Option<i32>
+        let some_char = Some('e'); // it can infer it's Option<char>
+        let absent_num: Option<i32> = None; // rust needs to be told the type, as it can't infer
+                                            // by just looking at the None value, Here we tell
+                                            // rust we mean for absent_num to be of type
+                                            // Option<i32>
+        // So what is the point of Option and Some, when we can have a None value?
+        // it's because Option<T> and T are different types, the compiler won't let us use
+        // Option<T> value as if we were using a valid value. 
+        // i.e we can't add 8_i32 to some_num
+        // In other words, you have to convert an Option<T> to a T before you can perform
+        // T operations with it. And this helps us catch biggest issue with null:
+        // assuming that something isn't null, when it is. And the match expression is
+        // a control flow construct that does just this when used with enums. It handles
+        // the cases when you do have T, and also when you None, and many others!!
+
+    }
+
+    {
+        // coin sorter!!
+        #[derive(Debug)] 
+        enum UsState{
+            NJ,
+            NY,
+            DC,
+            HI,
+        }
+
+        #[derive(Debug)] 
+        enum Coin {
+            Penny,
+            Nickel,
+            Dime,
+            Quarter(UsState),
+        }
+        
+        fn denomination(coin: &Coin) -> u8 {
+            match coin {
+                Coin::Penny => {
+                    println!("Lucky Penny!");
+                    1
+                }
+                Coin::Nickel => 5,
+                Coin::Dime => 10,
+                Coin::Quarter(state) => {
+                    // You cannot format like this unless you use Debug
+                    println!("state quarter from {state:?}!");
+                    25
+                }
+            }
+        }
+
+        let c: Coin = Coin::Quarter(UsState::DC);
+        let val: u8 = denomination(&c);
+        println!("{:?}",c)
+    }
+
+    {
+        // using match with Option<T>, to make handling None cases much easier!
+
+
+        fn plus_one(x: Option<i32>) -> Option<i32> {
+           match x {
+               None => None,
+               Some(i) => Some(i + 1),
+           }
+        }
+        // matches are exhaustive, i.e will check for every value possible
+        // for enums this is fine, but for Option<i32>, or similar, 
+        // you have to use the catch-all pattern, 
+
+        let five: Option<i32> = Some(5);
+
+        let six = plus_one(five);
+
+        let none: Option<i32> = plus_one(None); // here we have to specify the type,
+                                                // as the compiler can't infer
+
+        println!("{} {}", five.unwrap(), six.unwrap()); // five wasn't consumed as it was a
+                                                        // simple i32 type which could be copied
+    }
+
+
+    {
+        #[derive(Debug)]
+        struct Player {
+            hats: i32,
+            position: i32,
+        }
+        
+        impl Player {
+            fn roll(&mut self){
+                let mut num = rand::thread_rng().gen_range(0..=6);
+                match num {
+                    3 => self.add_fancy_hat(),
+                    5 => self.remove_fancy_hat(),
+                    6 => self.step(),
+                    _ => self.roll(),
+                }
+                println!("{:?}", num);
+            }
+
+            fn add_fancy_hat(&mut self) {
+                self.hats += 1;
+            }
+            fn remove_fancy_hat(&mut self) {
+                self.hats -= 1;
+            }
+            fn step(&mut self) {
+                self.position += 1;
+            }
+        }
+
+        let mut p: Player = Player {
+            hats: 0,
+            position: 0,
+        };
+
+        p.roll();
+        p.roll(); 
+        println!("{:?}",p);
+    }
+
+    // Consier Control flow with if let and let else, a less verbose way to handle values
+    // that match one pattern while ignoring the rest.
+    // Eg:
+    // let config_max = Some(3u8);
+    // match config_max {
+    //      Some(max) => println!("max = {max}"),
+    //      _ => (),
+    //  
+    //  }
+    //  we aren't doing anything with the None value,
+    //  instead we could write this in a shorter way using if let:
+    //  let config_max = Some(3u8);
+    //  if let Some(max) = config_max {
+    //      println!("max = {max}");
+    //  }
+    //  the syntax if let takes a pattern and expr separated by an equals,
+
+    {
+        // let's say here we get a value, but we want to make sure we aren't working w/
+        // a null type, we can do this, like this instead of using the match
+        // which is longer to write out, what we lose in having an exhaustive list
+        // is conciseness
+        let config_max = Some(100u8);
+        if let Some(max) = config_max {
+            println!("max = {max}");
+        };
+
+
+    }
+
+    {
+        // coin sorter!!
+        #[derive(Debug)] 
+        enum UsState {
+            NJ,
+            NY,
+            DC,
+            HI,
+        }
+
+        impl UsState {
+            fn existed_in(&self, year: u16) -> bool {
+                match self {
+                    UsState::NJ => year >= 1776,
+                    UsState::NY => year >= 1788,
+                    UsState::DC => year >= 1889,
+                    UsState::HI => year >= 1959,
+                    _ => false,
+                }
+            }
+        }
+
+
+        #[derive(Debug)] 
+        enum Coin {
+            Penny,
+            Nickel,
+            Dime,
+            Quarter(UsState),
+        }
+        
+        fn denomination(coin: &Coin) -> u8 {
+            match coin {
+                Coin::Penny => {
+                    println!("Lucky Penny!");
+                    1
+                }
+                Coin::Nickel => 5,
+                Coin::Dime => 10,
+                Coin::Quarter(state) => {
+                    // You cannot format like this unless you use Debug
+                    println!("state quarter from {state:?}!");
+                    25
+                }
+            }
+        }
+        
+        let mut count = 0;
+        fn count_coins_1(coin: &Coin, count: &mut i32){
+            match coin {
+                Coin::Quarter(state) => println!("{state:?}"),
+                _ => *count += 1,
+            }
+        } 
+        fn count_coins_2(coin: &Coin, count: &mut i32){
+            // using if let
+            if let Coin::Quarter(state) = coin {
+                println!("{state:?}");
+            } else {
+                *count += 1;
+            }
+        }
+
+        let c1: Coin = Coin::Quarter(UsState::NJ);
+        let c2: Coin = Coin::Quarter(UsState::NY);
+        let c3: Coin = Coin::Penny;
+        count_coins_1(&c1, &mut count);
+        count_coins_2(&c2, &mut count);
+        count_coins_2(&c3, &mut count); // only non-quarter
+        println!("{:?}", count); 
+        
+        fn describe_quarter(coin: &Coin) -> Option<String> {
+            if let Coin::Quarter(ref state) = *coin { 
+                // the state has to be referenced
+                // it is part of an enum struct that has multiple fields
+                // and doesn't implement copy, so we have to borrow
+                // if we had passed coin not as a reference but as to take
+                // ownership, we wouldn't have to ref state, instead
+                // we could've directly used it, as the ownership would've
+                // been transferred
+                if state.existed_in(1900) {
+                    Some(format!("{state:?} is pretty old (for the US)"))
+                } else {
+                    Some(format!("{state:?} is relatively new!"))
+                }
+            } else {
+                None
+            }
+        }
+        // This works but it has pushed the work into the body of if let statement
+        // if the work to be done was more complicated, it would be hard to follow exactly
+        // how the top-level branches relate. 
+        
+        fn describe_quarter2(coin: &Coin) -> Option<String> {
+            // here state is state if the 'if let' conditional is true
+            // otherwise it's None
+            let state = if let Coin::Quarter(ref state) = *coin { 
+                state
+            } else {
+                return None; //quiting the function early, we finally use return!!
+            };
+            // if the above if let 
+            if state.existed_in(1900) {
+                Some(format!("{state:?} is pretty old (for the US)"))
+            } else {
+                Some(format!("{state:?} is relatively new!"))
+            }
+        }
+        // This also works but is also confusing in it's own way, one branch of the 
+        // if let produces a value and another returns from the function entirely
+        // To make this common pattern nicer to express, rust has 'let..else'
+        // syntax, which is similar to 'if let' in the sense it takes a pattern
+        // on the left side and an expression on the right, but it doesn't have an
+        // 'if' branch, only an else branch. If the pattern matches, it will bind the
+        // value from the pattern to the OUTER SCOPE, i.e you can use it outside the let.. else
+        // block
+        // ,otherwise it'll flow to the else arm and then exit the function with None, but if
+        // we didn't use return, we could instead return to the outscope a different value
+        // for example we changed None to material, or something else, and then based on the 
+        // material of the coin, describe it based on that insteead or something else,
+        // but we don't necessarily have to quit immediately, and whatever the let..else
+        // pattern evaluates to
+        
+        fn describe_quarter3(coin: &Coin) -> Option<String> {
+            // Here we don't have to say let state = ...
+            // because with the 
+            let Coin::Quarter(ref state) = *coin else{ // this is in essence the same as let state ...
+                                                  // because we are destructuring and getting state
+                                                  // out of coin
+                return None; //quiting the function early
+            };
+            // if the above if let 
+            if state.existed_in(1900) {
+                Some(format!("{state:?} is pretty old (for the US)"))
+            } else {
+                Some(format!("{state:?} is relatively new!"))
+            }
+        }
+        
+        let desc: Option<String> = describe_quarter(&c1);
+
+        if let x = desc {
+            println!("{:?}",x);
+        } else {
+            println!("not a quarter!");
+        };
+    }
+}
+
+        
 
 // using some generics so that I can return the mem. addr. of any
 // type!! :)
